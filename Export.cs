@@ -46,7 +46,8 @@ static class Export
         IReadOnlyDictionary<string, Reference> references, Action<int, int>? progress = null)
     {
         var paths = sources.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        string run = Path.Combine(root, $"BMT_{DateTime.UtcNow:yyyyMMddTHHmmssZ}_{Guid.NewGuid():N}");
+        string prefix = paths.All(FolderSync.IsBmt) ? "BMT" : paths.All(ThermalFileReader.IsJpeg) ? "FLIR" : "Thermal";
+        string run = Path.Combine(root, $"{prefix}_{DateTime.UtcNow:yyyyMMddTHHmmssZ}_{Guid.NewGuid():N}");
         Directory.CreateDirectory(run);
         var summary = new List<object>();
         for (int i = 0; i < paths.Length; i++)
@@ -56,14 +57,15 @@ static class Export
             try
             {
                 var frame = reader.Read(path);
-                references.TryGetValue(frame.Sha256, out var reference);
+                Reference? reference = null;
+                if (frame.Backend == Testo890Reader.Backend) references.TryGetValue(frame.Sha256, out reference);
                 var validation = Validate(frame, reference);
                 string name = $"{i + 1:D4}_{Path.GetFileNameWithoutExtension(path)}";
                 folder = Path.Combine(run, name);
                 Write(frame, folder, validation, reference);
                 summary.Add(new { source = path, status = "Extraction successful", output = name,
                     validation = validation.Status, warnings = Warnings(frame, validation),
-                    frame.Width, frame.Height, frame.Sha256 });
+                    frame.Width, frame.Height, frame.Sha256, frame.Format });
             }
             catch (Exception e)
             {
@@ -99,11 +101,15 @@ static class Export
         using (var bin = new BinaryWriter(File.Create(npy), Encoding.ASCII))
         {
             bin.Write(new byte[] { 0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 1, 0 });
-            string header = FormattableString.Invariant($"{{'descr': '<f4', 'fortran_order': False, 'shape': ({frame.Height}, {frame.Width}), }}");
+            string dtype = frame.PreciseValues is null ? "<f4" : "<f8";
+            string header = FormattableString.Invariant($"{{'descr': '{dtype}', 'fortran_order': False, 'shape': ({frame.Height}, {frame.Width}), }}");
             header += new string(' ', (64 - (10 + header.Length + 1) % 64) % 64) + "\n";
             bin.Write((ushort)header.Length);
             bin.Write(Encoding.ASCII.GetBytes(header));
-            foreach (float value in frame.Values) bin.Write(value);
+            if (frame.PreciseValues is double[] precise)
+                foreach (double value in precise) bin.Write(value);
+            else
+                foreach (float value in frame.Values) bin.Write(value);
         }
         using (var csv = new StreamWriter(Path.Combine(folder, "temperature.csv"), false, Encoding.ASCII))
         {
@@ -112,25 +118,30 @@ static class Export
                 for (int x = 0; x < frame.Width; x++)
                 {
                     if (x > 0) csv.Write(',');
-                    csv.Write(frame.At(x, y).ToString("R", Invariant));
+                    csv.Write(frame.PreciseValues is null
+                        ? frame.Values[y * frame.Width + x].ToString("R", Invariant)
+                        : frame.At(x, y).ToString("R", Invariant));
                 }
                 csv.WriteLine();
             }
         }
         SavePng(frame.Preview, Path.Combine(folder, "thermal_preview.png"));
         if (frame.Visible is not null) SavePng(frame.Visible, Path.Combine(folder, "visible_image.png"));
+        if (frame.SourceDisplay is not null) SavePng(frame.SourceDisplay, Path.Combine(folder, "source_display.png"));
+        var stats = frame.Statistics();
         WriteJson(Path.Combine(folder, "metadata.json"), new
         {
-            frame.Camera, frame.Width, frame.Height, frame.Layout, frame.PayloadOffset, frame.Acquisition, unit = "C",
+            frame.Camera, frame.Width, frame.Height, frame.Layout, frame.Format,
+            payloadOffset = frame.PreciseValues is null ? (int?)frame.PayloadOffset : null,
+            frame.Acquisition, frame.Radiometry, unit = "C",
             coordinateConvention = "Top left origin, zero based; index [y,x]. Preview generated from the same grid.",
-            minimumC = frame.Values.Min(), maximumC = frame.Values.Max(),
-            averageC = frame.Values.Average(v => (double)v)
+            minimumC = stats.Min, maximumC = stats.Max, averageC = stats.Mean
         });
         var hashes = Directory.GetFiles(folder).Order(StringComparer.Ordinal).ToDictionary(
             p => Path.GetFileName(p), p => HashFile(p), StringComparer.Ordinal);
         WriteJson(Path.Combine(folder, "extraction_report.json"), new
         {
-            source = frame.Path, sourceSha256 = frame.Sha256, backend = Testo890Reader.Backend,
+            source = frame.Path, sourceSha256 = frame.Sha256, backend = frame.Backend,
             extraction = "Extraction successful", validation, referencePoints = reference?.Points.Select(p => new
             {
                 p.X, p.Y, referenceC = p.Celsius, extractedC = frame.At(p.X, p.Y),

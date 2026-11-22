@@ -52,17 +52,20 @@ static class Regions
     }
 
     public static TemperatureStats Stats(float[] values, int[] mask)
+        => Stats(i => values[i], mask);
+
+    public static TemperatureStats Stats(Func<int, double> value, IEnumerable<int> mask)
     {
-        if (mask.Length == 0) throw new InvalidDataException("ROI has no pixels.");
         double mean = 0, m2 = 0, min = double.PositiveInfinity, max = double.NegativeInfinity;
         int n = 0;
         foreach (int i in mask)
         {
-            double t = values[i], d = t - mean;
+            double t = value(i), d = t - mean;
             mean += d / ++n;
             m2 += d * (t - mean);
             min = Math.Min(min, t); max = Math.Max(max, t);
         }
+        if (n == 0) throw new InvalidDataException("ROI has no pixels.");
         return new(n, mean, min, max, Math.Sqrt(Math.Max(0, m2 / n)));
     }
 

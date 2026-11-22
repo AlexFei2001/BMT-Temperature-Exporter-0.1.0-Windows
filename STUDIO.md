@@ -1,8 +1,17 @@
-# BMT Thermal Analysis Studio 0.2.1
+# BMT Thermal Analysis Studio 0.3.0
 
 ## 中文快速上手
 
 主窗口保留原来的打开 BMT、温度导出和 IRSoft 参考点核对。只想提取整幅温度时，选中图像后点 **Export selected**，输出仍是摄氏温度矩阵。
+
+### FLIR 摄氏温度提取
+
+1. 点 **FLIR settings**，选择 ExifTool 的 `exiftool.exe`。Windows 版应和解压时附带的 `exiftool_files` 文件夹放在一起。程序会记住此路径和字节序。
+2. 选择字节序。本项目测试过的四张 FLIR T1020 文件用 `swap16`，其他相机和文件需与 FLIR 软件核对后再选。批量操作使用当前所选字节序，按字节序分批处理不同来源。
+3. 点 **Open thermal files** 或拖入原始 FLIR 辐射 JPEG。**Thermal** 显示从温度阵列生成的灰度图。**Source JPEG** 是原始文件的显示画面，可能包含色条、文字或融合图。温度和 ROI 请在 Thermal 页查看。
+4. 点 **Export selected**。FLIR 的 `temperature.npy` 为 float64 摄氏矩阵，CSV 往返保留同样的值。BMT NPY 继续使用原来的 float32。可混批导出，普通 JPG 或缺少必要标定参数的文件会在 `summary.json` 中列出失败原因。
+
+本版沿用原 FLIR 读数和环境补偿代码，使用照片保存的测温参数。 `metadata.json` 记录字节序、ExifTool 版本和换算参数。应用自带 Python 运行环境，ExifTool 需单独取得。新增的 FLIR 支持覆盖单图查看、ROI 和批量导出。Folder Sync、Monitoring 和 IRSoft 参考流程仍用于 Testo BMT。FLIR 数值仍需与厂商软件独立核对。
 
 ### Thermal ROIs · 看一张图的局部温度
 
@@ -58,4 +67,4 @@ Select different anomaly and reference regions to plot their mean temperatures a
 
 ## Developer build
 
-Use .NET 8 SDK, Inno Setup and standard x64 CPython (3.13 tested) with `registration-build-requirements.txt` in a build environment. Pass its Python executable as `-Python` to `build.ps1`. The GitHub source includes the unchanged registration module and its dependencies under `registration_source`. In the thesis workspace, the script can use the original local copy, or another checkout supplied via `-RegistrationSource`. Build output is under `dist`.
+Use .NET 8 SDK, Inno Setup and standard x64 CPython (3.13 tested) with `registration-build-requirements.txt` in a build environment. Pass its Python executable as `-Python` to `build.ps1`. In the thesis workspace, the build locates the original registration module and the FLIR exporter. A separate source checkout can provide those modules via `-RegistrationSource` and `-FlirSource`. Build output is under `dist`.

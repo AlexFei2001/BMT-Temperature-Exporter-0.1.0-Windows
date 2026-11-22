@@ -118,7 +118,7 @@ sealed class RegionEditor : Window
         view.InvalidateVisual();
         if (!drawing && list.SelectedItem is Region r)
         {
-            var s = Regions.Stats(frame.Values, Regions.Mask(r, frame.Width, frame.Height));
+            var s = Regions.Stats(frame.AtIndex, Regions.Mask(r, frame.Width, frame.Height));
             status.Text = $"{r.Name}   {s.Count} pixels   Mean {s.Mean:F3} °C   Min {s.Min:F3} °C   Max {s.Max:F3} °C   SD {s.StdDev:F3} °C";
         }
     }

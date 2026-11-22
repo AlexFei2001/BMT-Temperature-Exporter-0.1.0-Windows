@@ -14,7 +14,14 @@ record ThermalFrame(string Path, string Sha256, int Width, int Height, float[] V
     string Camera, string Layout, int PayloadOffset, BitmapSource Preview, BitmapSource? Visible,
     string[] Warnings)
 {
-    public float At(int x, int y) => Values[checked(y * Width + x)];
+    public double At(int x, int y) => AtIndex(checked(y * Width + x));
+    public double AtIndex(int i) => PreciseValues is null ? Values[i] : PreciseValues[i];
+    public string Backend { get; init; } = Testo890Reader.Backend;
+    public string Format { get; init; } = "Testo BMT";
+    public double[]? PreciseValues { get; init; }
+    public BitmapSource? SourceDisplay { get; init; }
+    public System.Text.Json.JsonElement? Radiometry { get; init; }
+    public TemperatureStats Statistics() => Regions.Stats(AtIndex, Enumerable.Range(0, Width * Height));
     public AcquisitionInfo Acquisition { get; init; } = new(null, null, null, null);
 }
 

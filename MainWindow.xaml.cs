@@ -15,6 +15,7 @@ public partial class MainWindow : Window
         public string Name => System.IO.Path.GetFileName(Path);
     }
     private readonly IBmtReader reader = new Testo890Reader();
+    private FlirOptions? flir = FlirOptions.Load();
     private readonly Dictionary<string, Region[]> regions = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Reference> references = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -36,7 +37,7 @@ public partial class MainWindow : Window
     {
         var known = Files.Items.Cast<Item>().Select(i => i.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Item? first = null;
-        foreach (string path in paths.Where(FolderSync.IsBmt).Select(Path.GetFullPath))
+        foreach (string path in paths.Where(ThermalFileReader.SupportedPath).Select(Path.GetFullPath))
         {
             if (!known.Add(path)) continue;
             var item = new Item(path);
@@ -49,7 +50,11 @@ public partial class MainWindow : Window
 
     private void OpenFiles(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "Testo thermal images (*.bmt)|*.bmt", Multiselect = true };
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Thermal images (*.bmt, *.jpg, *.jpeg)|*.bmt;*.jpg;*.jpeg|Testo BMT|*.bmt|FLIR JPEG|*.jpg;*.jpeg",
+            Multiselect = true
+        };
         if (dialog.ShowDialog(this) == true) AddFiles(dialog.FileNames);
     }
 
@@ -61,11 +66,11 @@ public partial class MainWindow : Window
 
     private void OpenFolder(object sender, RoutedEventArgs e)
     {
-        if (PickFolder("Import a folder of BMT files") is not string folder) return;
+        if (PickFolder("Import BMT and radiometric JPEG files") is not string folder) return;
         try
         {
-            var paths = Directory.GetFiles(folder).Where(FolderSync.IsBmt).Order(StringComparer.OrdinalIgnoreCase).ToArray();
-            if (paths.Length == 0) Status.Text = "No BMT files in this folder.";
+            var paths = Directory.GetFiles(folder).Where(ThermalFileReader.SupportedPath).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (paths.Length == 0) Status.Text = "No BMT or JPEG files in this folder.";
             else AddFiles(paths);
         }
         catch (Exception ex) { Status.Text = ex.Message; }
@@ -80,7 +85,7 @@ public partial class MainWindow : Window
     private void OnDrop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return;
-        if (!paths.Any(FolderSync.IsBmt)) Status.Text = "Drop one or more .bmt files.";
+        if (!paths.Any(ThermalFileReader.SupportedPath)) Status.Text = "Drop one or more BMT or radiometric JPEG files.";
         else AddFiles(paths);
     }
 
@@ -89,6 +94,7 @@ public partial class MainWindow : Window
         int version = ++selectionVersion;
         current = null;
         Thermal.Source = Visible.Source = null;
+        VisibleTab.Header = "Visible";
         NoVisible.Visibility = Visibility.Visible;
         ValidationText.Text = "";
         Pixel.Text = "Move over the thermal image to read a pixel.";
@@ -96,14 +102,18 @@ public partial class MainWindow : Window
         Details.Text = $"Opening {item.Name}…";
         try
         {
-            var frame = await Task.Run(() => reader.Read(item.Path));
+            var selectedReader = new ThermalFileReader(flir);
+            var frame = await Task.Run(() => selectedReader.Read(item.Path));
             if (version != selectionVersion) return;
             current = frame;
             Thermal.Source = frame.Preview;
-            Visible.Source = frame.Visible;
-            NoVisible.Visibility = frame.Visible is null ? Visibility.Visible : Visibility.Collapsed;
-            Details.Text = $"{item.Name}   |   {frame.Camera}   |   {frame.Width} × {frame.Height}\n" +
-                $"Min {frame.Values.Min():F2} °C   ·   Max {frame.Values.Max():F2} °C   ·   Mean {frame.Values.Average(v => (double)v):F2} °C";
+            Visible.Source = frame.Visible ?? frame.SourceDisplay;
+            if (frame.SourceDisplay is not null) VisibleTab.Header = "Source JPEG";
+            NoVisible.Visibility = Visible.Source is null ? Visibility.Visible : Visibility.Collapsed;
+            var stats = frame.Statistics();
+            string order = frame.Radiometry is JsonElement data ? $"   |   {data.GetProperty("raw_byte_order").GetString()}" : "";
+            Details.Text = $"{item.Name}   |   {frame.Camera}   |   {frame.Width} × {frame.Height}{order}\n" +
+                $"Min {stats.Min:F2} °C   ·   Max {stats.Max:F2} °C   ·   Mean {stats.Mean:F2} °C";
             ShowValidation();
             Status.Text = "Extraction successful. Select the files you want to export.";
         }
@@ -127,9 +137,19 @@ public partial class MainWindow : Window
         if (warnings.Length > 0) ValidationText.Text += "\n" + string.Join(" ", warnings);
     }
 
+    private void ConfigureFlir(object sender, RoutedEventArgs e)
+    {
+        var dialog = new FlirSettingsWindow(flir) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        flir = dialog.Options;
+        Status.Text = "FLIR settings saved.";
+        if (Files.SelectedItem is Item item && ThermalFileReader.IsJpeg(item.Path))
+            OnSelection(this, new SelectionChangedEventArgs(ListBox.SelectionChangedEvent, Array.Empty<object>(), Array.Empty<object>()));
+    }
+
     private void EditRegions(object sender, RoutedEventArgs e)
     {
-        if (current is not ThermalFrame frame) { Status.Text = "Open a BMT first."; return; }
+        if (current is not ThermalFrame frame) { Status.Text = "Open a thermal file first."; return; }
         regions.TryGetValue(frame.Sha256, out var saved);
         var editor = new RegionEditor(frame, saved ?? []) { Owner = this };
         if (editor.ShowDialog() == true)
@@ -141,12 +161,12 @@ public partial class MainWindow : Window
 
     private void RegisterImage(object sender, RoutedEventArgs e)
     {
-        if (current is not ThermalFrame frame) { Status.Text = "Open a BMT first."; return; }
+        if (current is not ThermalFrame frame) { Status.Text = "Open a thermal file first."; return; }
         new RegistrationWindow(frame) { Owner = this }.ShowDialog();
     }
 
     private void MonitorSequence(object sender, RoutedEventArgs e) =>
-        new MonitorWindow(reader, Files.SelectedItems.Cast<Item>().Select(x => x.Path).ToArray()) { Owner = this }.ShowDialog();
+        new MonitorWindow(reader, Files.SelectedItems.Cast<Item>().Select(x => x.Path).Where(FolderSync.IsBmt).ToArray()) { Owner = this }.ShowDialog();
 
     private void OnPixel(object sender, MouseEventArgs e)
     {
@@ -165,7 +185,7 @@ public partial class MainWindow : Window
 
     private void LoadReference(object sender, RoutedEventArgs e)
     {
-        if (current is null) { Status.Text = "Open the matching BMT first."; return; }
+        if (current is null || current.Backend != Testo890Reader.Backend) { Status.Text = "Open the matching Testo BMT to load an IRSoft reference."; return; }
         var dialog = new OpenFileDialog { Filter = "IRSoft reference JSON (*.json)|*.json" };
         if (dialog.ShowDialog(this) != true) return;
         try
@@ -201,10 +221,11 @@ public partial class MainWindow : Window
         Status.Text = $"Exporting {selected.Length} files…";
         string destination = output;
         var snapshot = new Dictionary<string, Reference>(references, StringComparer.OrdinalIgnoreCase);
+        var batchReader = new ThermalFileReader(flir);
         var progress = new Progress<int>(n => { Progress.Value = n; Status.Text = $"Processed {n} of {selected.Length}."; });
         try
         {
-            string folder = await Task.Run(() => Export.Batch(selected, destination, reader, snapshot,
+            string folder = await Task.Run(() => Export.Batch(selected, destination, batchReader, snapshot,
                 (n, _) => ((IProgress<int>)progress).Report(n)));
             using var report = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "summary.json")));
             int ok = report.RootElement.EnumerateArray().Count(r => r.GetProperty("status").GetString() == "Extraction successful");

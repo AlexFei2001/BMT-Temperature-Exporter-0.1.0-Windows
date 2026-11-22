@@ -14,9 +14,9 @@
     <DockPanel Margin="22">
         <StackPanel DockPanel.Dock="Top">
             <TextBlock Text="BMT Thermal Analysis Studio" FontSize="29" FontWeight="SemiBold"/>
-            <TextBlock Margin="0,3,0,14" Foreground="#405A66" Text="Testo 890-2  ·  Preview release  ·  Celsius"/>
+            <TextBlock Margin="0,3,0,14" Foreground="#405A66" Text="Testo BMT and FLIR radiometric JPEG  ·  Celsius"/>
             <WrapPanel>
-                <Button Click="OpenFiles">Open BMT files…</Button>
+                <Button Click="OpenFiles">Open thermal files…</Button>
                 <Button Click="OpenFolder">Import folder…</Button>
                 <Button Click="ChooseSync">Folder Sync…</Button>
                 <Button x:Name="StopButton" Click="StopSync" IsEnabled="False">Stop sync</Button>
@@ -24,6 +24,7 @@
                 <Button Click="EditRegions">Thermal ROIs…</Button>
                 <Button Click="RegisterImage">RGB registration…</Button>
                 <Button Click="MonitorSequence">Monitoring…</Button>
+                <Button Click="ConfigureFlir">FLIR settings…</Button>
             </WrapPanel>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -34,7 +35,7 @@
                 <TextBlock x:Name="OutputText" Margin="4,4,0,6" MaxWidth="550" TextTrimming="CharacterEllipsis"/>
             </WrapPanel>
             <ProgressBar x:Name="Progress" Height="5" Minimum="0" Maximum="1"/>
-            <TextBlock x:Name="Status" Text="Open or drop BMT files to begin." TextWrapping="Wrap" Margin="0,8,0,0"/>
+            <TextBlock x:Name="Status" Text="Open or drop Testo BMT or FLIR radiometric JPEG files." TextWrapping="Wrap" Margin="0,8,0,0"/>
             <TextBlock x:Name="SyncStatus" Text="Folder Sync off" TextTrimming="CharacterEllipsis" Foreground="#405A66" Margin="0,4,0,0"/>
         </StackPanel>
         <Grid Margin="0,5,0,0">
@@ -57,7 +58,7 @@
                                        RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                             </Grid>
                         </TabItem>
-                        <TabItem Header="Visible">
+                        <TabItem x:Name="VisibleTab" Header="Visible">
                             <Grid Background="#172A31">
                                 <TextBlock x:Name="NoVisible" Text="No visible image available" Foreground="White"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>

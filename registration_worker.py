@@ -2,11 +2,13 @@
 import base64
 import json
 import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
 
 from modules.registration import ThermalRegistrar
+from flir_reader import extract_frame
 
 
 def decode(blob, mode):
@@ -47,9 +49,35 @@ def register(request):
                 overlay=base64.b64encode(png.tobytes()).decode("ascii"))
 
 
+def execute(request):
+    if request.get("operation") == "flir":
+        source = Path(request["path"])
+        exiftool = Path(request["exiftool"])
+        # Stage Unicode paths under a short ASCII filename for Windows ExifTool.
+        import os
+        import tempfile
+        if os.name == "nt" and not str(source).isascii():
+            with tempfile.TemporaryDirectory(prefix="studio-flir-") as directory:
+                staged = Path(directory) / "source.jpg"
+                import shutil
+                shutil.copyfile(source, staged)
+                order = request["byteOrder"]
+                t, _, info = extract_frame(staged, order, [str(exiftool)])
+                for key in ("original_parameters", "effective_parameters"):
+                    info[key]["SourceFile"] = str(source)
+        else:
+            t, _, info = extract_frame(source, request["byteOrder"], [str(exiftool)])
+        h, w = t.shape
+        if not 0 < w * h <= 8_000_000:
+            raise ValueError("FLIR temperature dimensions are outside the supported range.")
+        return dict(width=w, height=h, metadata=info,
+                    temperature=base64.b64encode(t.astype("<f8", copy=False).tobytes()).decode("ascii"))
+    return register(request)
+
+
 if __name__ == "__main__":
     try:
-        print(json.dumps(register(json.load(sys.stdin)), allow_nan=False))
+        print(json.dumps(execute(json.load(sys.stdin)), allow_nan=False))
     except Exception as exc:
         print(json.dumps({"error": str(exc)}))
         sys.exit(1)
