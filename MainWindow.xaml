@@ -1,6 +1,6 @@
 <Window x:Class="BmtExporter.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="BMT Temperature Exporter" Width="1120" Height="740" MinWidth="780" MinHeight="540"
+    Title="BMT Thermal Analysis Studio" Width="1120" Height="740" MinWidth="780" MinHeight="540"
     Background="#F0F4F5" Foreground="#152B35" FontFamily="Segoe UI" FontSize="13"
     AllowDrop="True" DragOver="OnDrag" Drop="OnDrop">
     <Window.Resources>
@@ -13,7 +13,7 @@
     </Window.Resources>
     <DockPanel Margin="22">
         <StackPanel DockPanel.Dock="Top">
-            <TextBlock Text="BMT Temperature Exporter" FontSize="29" FontWeight="SemiBold"/>
+            <TextBlock Text="BMT Thermal Analysis Studio" FontSize="29" FontWeight="SemiBold"/>
             <TextBlock Margin="0,3,0,14" Foreground="#405A66" Text="Testo 890-2  ·  Preview release  ·  Celsius"/>
             <WrapPanel>
                 <Button Click="OpenFiles">Open BMT files…</Button>
@@ -21,6 +21,9 @@
                 <Button Click="ChooseSync">Folder Sync…</Button>
                 <Button x:Name="StopButton" Click="StopSync" IsEnabled="False">Stop sync</Button>
                 <Button Click="LoadReference">Load IRSoft reference…</Button>
+                <Button Click="EditRegions">Thermal ROIs…</Button>
+                <Button Click="RegisterImage">RGB registration…</Button>
+                <Button Click="MonitorSequence">Monitoring…</Button>
             </WrapPanel>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -58,7 +61,7 @@
                             <Grid Background="#172A31">
                                 <TextBlock x:Name="NoVisible" Text="No visible image available" Foreground="White"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <Image x:Name="Visible" Stretch="Uniform"/>
+                                <Image x:Name="Visible" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                         </TabItem>
                     </TabControl>

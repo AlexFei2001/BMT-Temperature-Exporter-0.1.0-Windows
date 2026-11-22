@@ -1,9 +1,9 @@
 [Setup]
-AppId=BmtTemperatureExporter
-AppName=BMT Temperature Exporter
-AppVersion=0.1.0
-DefaultDirName={localappdata}\Programs\BMT Temperature Exporter
-DefaultGroupName=BMT Temperature Exporter
+AppId=BmtThermalAnalysisStudio
+AppName=BMT Thermal Analysis Studio
+AppVersion=0.2.1
+DefaultDirName={localappdata}\Programs\BMT Thermal Analysis Studio
+DefaultGroupName=BMT Thermal Analysis Studio
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -12,7 +12,7 @@ WizardStyle=modern
 SetupIconFile=app.ico
 UninstallDisplayIcon={app}\BmtExporter.exe
 OutputDir=dist
-OutputBaseFilename=BmtExporter-0.1.0-Setup-x64
+OutputBaseFilename=BmtStudio-0.2.1-Setup-x64
 Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
@@ -21,12 +21,12 @@ DisableProgramGroupPage=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "dist\BmtExporter-0.1.0-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\BmtStudio-0.2.1-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\BMT Temperature Exporter"; Filename: "{app}\BmtExporter.exe"
+Name: "{group}\BMT Thermal Analysis Studio"; Filename: "{app}\BmtExporter.exe"
 Name: "{group}\BMT Temperature Exporter Manual"; Filename: "{app}\USER-GUIDE.txt"
-Name: "{userdesktop}\BMT Temperature Exporter"; Filename: "{app}\BmtExporter.exe"; Tasks: desktopicon
+Name: "{userdesktop}\BMT Thermal Analysis Studio"; Filename: "{app}\BmtExporter.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\BmtExporter.exe"; Description: "Launch BMT Temperature Exporter"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\BmtExporter.exe"; Description: "Launch BMT Thermal Analysis Studio"; Flags: nowait postinstall skipifsilent

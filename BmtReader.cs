@@ -15,6 +15,7 @@ record ThermalFrame(string Path, string Sha256, int Width, int Height, float[] V
     string[] Warnings)
 {
     public float At(int x, int y) => Values[checked(y * Width + x)];
+    public AcquisitionInfo Acquisition { get; init; } = new(null, null, null, null);
 }
 
 sealed class UnsupportedBmtException(string message) : Exception(message);
@@ -94,26 +95,12 @@ sealed class Testo890Reader : IBmtReader
         var warnings = new List<string> { "Independent IRSoft validation pending." };
         if (cameraLayout && !MatchesExtrema(values, headerMin, headerMax, 0.02f))
             warnings.Add("Stored header extrema differ from the extracted grid.");
-        BitmapSource? visible = null;
-        int jpeg = start + metadataSize;
-        if (jpeg + 3 < payload && bytes.AsSpan(jpeg, 3).SequenceEqual(new byte[] {255, 216, 255}))
-        {
-            try
-            {
-                using var image = new MemoryStream(bytes, jpeg, payload - jpeg, false);
-                visible = new JpegBitmapDecoder(image, BitmapCreateOptions.PreservePixelFormat,
-                    BitmapCacheOption.OnLoad).Frames[0];
-                visible.Freeze();
-            }
-            catch (Exception e) when (e is FileFormatException or NotSupportedException or ArgumentException)
-            {
-                warnings.Add("The embedded visible image could not be decoded.");
-            }
-        }
-        return new(path, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+        BitmapSource? visible = VisibleImage.FromBmt(bytes, start + metadataSize, payload, warnings);
+        return new ThermalFrame(path, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
             w, h, values, camera, multiple ? "890-2 dual grid, header extrema matched" :
             legacy ? "890-2 legacy header" : "890-2 extended header",
-            payload, MakePreview(values, w, h), visible, warnings.ToArray());
+            payload, MakePreview(values, w, h), visible, warnings.ToArray())
+        { Acquisition = cameraLayout ? AcquisitionInfo.FromExtendedHeader(ext[..248]) : new(null, null, null, null) };
     }
 
     private static bool MatchesExtrema(float[] values, float min, float max, float tolerance) =>

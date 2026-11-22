@@ -15,6 +15,7 @@ public partial class MainWindow : Window
         public string Name => System.IO.Path.GetFileName(Path);
     }
     private readonly IBmtReader reader = new Testo890Reader();
+    private readonly Dictionary<string, Region[]> regions = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Reference> references = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private FolderSync? sync;
@@ -125,6 +126,27 @@ public partial class MainWindow : Window
         var warnings = current.Warnings.Where(w => w != "Independent IRSoft validation pending.").ToArray();
         if (warnings.Length > 0) ValidationText.Text += "\n" + string.Join(" ", warnings);
     }
+
+    private void EditRegions(object sender, RoutedEventArgs e)
+    {
+        if (current is not ThermalFrame frame) { Status.Text = "Open a BMT first."; return; }
+        regions.TryGetValue(frame.Sha256, out var saved);
+        var editor = new RegionEditor(frame, saved ?? []) { Owner = this };
+        if (editor.ShowDialog() == true)
+        {
+            regions[frame.Sha256] = editor.Definitions;
+            Status.Text = $"{editor.Definitions.Length} ROI(s) defined for {Path.GetFileName(frame.Path)}.";
+        }
+    }
+
+    private void RegisterImage(object sender, RoutedEventArgs e)
+    {
+        if (current is not ThermalFrame frame) { Status.Text = "Open a BMT first."; return; }
+        new RegistrationWindow(frame) { Owner = this }.ShowDialog();
+    }
+
+    private void MonitorSequence(object sender, RoutedEventArgs e) =>
+        new MonitorWindow(reader, Files.SelectedItems.Cast<Item>().Select(x => x.Path).ToArray()) { Owner = this }.ShowDialog();
 
     private void OnPixel(object sender, MouseEventArgs e)
     {

@@ -121,7 +121,7 @@ static class Export
         if (frame.Visible is not null) SavePng(frame.Visible, Path.Combine(folder, "visible_image.png"));
         WriteJson(Path.Combine(folder, "metadata.json"), new
         {
-            frame.Camera, frame.Width, frame.Height, frame.Layout, frame.PayloadOffset, unit = "C",
+            frame.Camera, frame.Width, frame.Height, frame.Layout, frame.PayloadOffset, frame.Acquisition, unit = "C",
             coordinateConvention = "Top left origin, zero based; index [y,x]. Preview generated from the same grid.",
             minimumC = frame.Values.Min(), maximumC = frame.Values.Max(),
             averageC = frame.Values.Average(v => (double)v)

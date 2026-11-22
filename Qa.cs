@@ -135,7 +135,8 @@ static class Qa
             File.WriteAllText(report, JsonSerializer.Serialize(new
             {
                 passed = true, files = paths.Length, supported = accepted.Count, unsupported = paths.Length - accepted.Count,
-                independentIrSoftValidation = "pending", roundTripDirectory = folder, results = scanned
+                independentIrSoftValidation = "pending", roundTripDirectory = folder, results = scanned,
+                studio = StudioQa.Run(input)
             }, Export.Json));
             return 0;
         }
