@@ -1,0 +1,54 @@
+BMT Temperature Exporter 0.1.0
+==============================
+
+Install on Windows 10/11 x64
+
+Double-click BmtExporter-0.1.0-Setup-x64.exe. Follow the prompts and
+choose whether to create a desktop shortcut. Open BMT Temperature Exporter
+from Start or the shortcut. The installer is unsigned, so Windows might
+display a publisher prompt. Check that you received it from a trusted source.
+
+For portable use, extract the entire ZIP and double-click BmtExporter.exe
+inside the extracted folder. Keep all supplied files together. The package
+includes .NET. Python, Conda, ExifTool, and IRSoft are unnecessary for export.
+To remove an installed copy, use Settings > Apps > Installed apps.
+
+Open and export
+
+1. Click Open BMT files, drag BMT files onto the window, or click Import folder.
+2. Select an image to see its resolution and temperature statistics.
+3. Move over the Thermal tab's image to read X, Y and Celsius. X is the column
+   and Y the row. The top-left pixel is (0,0). Visible displays the embedded
+   color photo when the file contains one.
+4. Choose Output folder. Select several items with Ctrl/Shift or Select all.
+5. Click Export selected. Open the new BMT_... folder shown in the status area.
+   summary.json lists all successes and errors.
+
+temperature.npy and temperature.csv contain the Celsius grid. Rows are Y
+and columns are X. In Excel use Data > From Text/CSV with comma separator
+and a locale that treats the period as the decimal point. NPY is float32;
+CSV preserves the original float32 values on re-import. The PNG preview is
+for visualization. The per-file JSON records the extraction method, dimensions,
+source/output hashes, warnings and independent validation status.
+
+Folder Sync
+
+Choose a folder where IRSoft or your camera saves BMT files. Existing files
+and new or changed files are loaded after size and timestamp stabilize.
+Files still in use are retried. Stop sync ends monitoring. Sync imports into
+the file list; click Export selected to produce files.
+
+IRSoft reference
+
+Export once and copy sourceSha256 from extraction_report.json into a copy of
+reference.example.json. In IRSoft, record the readings at matching native
+pixels under the original settings. Add entries such as
+{"x":10,"y":20,"celsius":21.42} to points using your own readings. Document
+the source, settings and tolerance, and set settingsAndCoordinatesConfirmed
+to true only after checking them. Select the BMT and load the JSON. The
+result applies to the matched points, for the current application session.
+Use 20-50 points across several files for the first comparison and include
+both warm and cool areas, boundaries and corners. Choose the tolerance before
+seeing the errors and record the IRSoft precision and coordinate conversion.
+
+See COMPATIBILITY.md for supported layouts and validation limits.

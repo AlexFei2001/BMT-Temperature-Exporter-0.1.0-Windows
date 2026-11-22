@@ -1,0 +1,8 @@
+{
+  "sourceSha256": "replace with sourceSha256 from extraction_report.json",
+  "provenance": "IRSoft version and measurement or export identifier",
+  "measurementSettings": "Record emissivity, reflected temperature and other available corrections",
+  "settingsAndCoordinatesConfirmed": false,
+  "toleranceC": 0.1,
+  "points": []
+}

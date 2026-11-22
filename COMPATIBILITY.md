@@ -1,0 +1,9 @@
+# Compatibility and limitations
+
+- Preview builds target Windows 10/11 x64 and carry the .NET 8 Desktop runtime. Extract the entire portable archive. No vendor DLL is included.
+- The internal reader recognizes observed Testo 890-2 BMT BMP-backed layouts at 640×480 and 1280×960, with or without a visible JPEG. Other camera models, data layouts and standalone exported images are rejected. The larger grid is read exactly as stored. The reader does not infer an acquisition mode from its dimensions alone.
+- The parser checks dimensions, record size and the following record marker. If an extended layout contains both resolutions, it requires a unique record matching the stored extrema within 0.001°C. The output preserves stored float32 values and row order. The preview is generated from those same values.
+- Only recognized metadata is exported. Camera serial, emissivity, reflection and other correction parameters are omitted by the current reader. Stored temperature values cannot be recalculated by changing those settings here.
+- Folder Sync polls the selected directory (nonrecursive). It compares size/timestamp across three polls and uses read sharing that excludes writers. Exact duplicate contents at the same path are skipped. Files with unchanged size and timestamp are not re-read. Files whose reads fail are retried or reconsidered after a modification.
+- Validation compares user-supplied, independently measured points at matching native coordinates and correction settings. The pass/fail criterion uses the maximum absolute point error. A pass applies only to the supplied points. The app does not read native-grid IRSoft spreadsheet exports directly. Reference metrics are testable without an IRSoft export by using synthetic values, which do not count as independent evidence.
+- IRSoft active image synchronization and embedded commands are not implemented. See FEASIBILITY.md for the evidence and SDK dependencies.
