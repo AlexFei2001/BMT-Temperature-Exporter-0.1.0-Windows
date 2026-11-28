@@ -2,7 +2,7 @@
 
 Windows desktop preview for Testo 890-2 BMT files and original FLIR radiometric JPEGs. See the [Studio guide](STUDIO.md) for FLIR setup, thermal ROIs, RGB registration, time series and build instructions. The original [exporter user guide](USER-GUIDE.txt), [compatibility notes](COMPATIBILITY.md) and [Testo integration feasibility](FEASIBILITY.md) cover BMT extraction.
 
-Download the [Studio 0.3.0 release](https://github.com/AlexFei2001/BMT-Temperature-Exporter-0.1.0-Windows/releases/tag/v0.3.0) for Windows with Testo BMT and FLIR radiometric JPEG support. Run its installer or extract the entire portable ZIP and open `BmtExporter.exe`. The installer is unsigned.
+Download [Studio v0.4.0 for Windows x64](https://github.com/AlexFei2001/BMT-Temperature-Exporter-0.1.0-Windows/releases/tag/v0.4.0). It supports Testo BMT and FLIR radiometric JPEGs and adds editable registration, registered image export and quantitative monitoring. See the [release notes with screenshots](RELEASE-NOTES.md) and [development report](REGISTRATION-THERMAL-ANALYSIS-UPDATE.md).
 
 Build with the dependencies listed in the Studio guide. Run `build.ps1` with the path to the Inno Setup compiler (`-InnoCompiler`), the build Python (`-Python`) and optionally a specific SDK host (`-Dotnet`). The script publishes a self-contained x64 build, portable ZIP and per-user installer under dist.
 

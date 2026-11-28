@@ -1,7 +1,7 @@
 [Setup]
 AppId=BmtThermalAnalysisStudio
 AppName=BMT Thermal Analysis Studio
-AppVersion=0.3.0
+AppVersion=0.4.0
 DefaultDirName={localappdata}\Programs\BMT Thermal Analysis Studio
 DefaultGroupName=BMT Thermal Analysis Studio
 PrivilegesRequired=lowest
@@ -12,7 +12,7 @@ WizardStyle=modern
 SetupIconFile=app.ico
 UninstallDisplayIcon={app}\BmtExporter.exe
 OutputDir=dist
-OutputBaseFilename=BmtStudio-0.3.0-Setup-x64
+OutputBaseFilename=BmtStudio-0.4.0-Setup-x64
 Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
@@ -21,7 +21,7 @@ DisableProgramGroupPage=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "dist\BmtStudio-0.3.0-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\BmtStudio-0.4.0-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\BMT Thermal Analysis Studio"; Filename: "{app}\BmtExporter.exe"

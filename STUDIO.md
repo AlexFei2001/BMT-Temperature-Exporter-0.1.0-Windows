@@ -1,4 +1,4 @@
-# BMT Thermal Analysis Studio 0.3.0
+# BMT Thermal Analysis Studio 0.4.0
 
 ## 中文快速上手
 
@@ -18,7 +18,7 @@
 1. 先打开并选中一张 BMT，点 **Thermal ROIs**。
 2. 选 **Rectangle**（矩形）、**Polygon**（多边形）或 **Point**（单点），可在旁边输入名称。点 **New ROI** 开始。
 3. 矩形点两个对角，单点点一次。多边形沿边界依次点击，再点 **Finish**。
-4. 左边选中 ROI，底部显示像素数、均值、最低温、最高温和总体标准差。拖动黄色顶点可以调整边界，**Rename** 和 **Delete** 用于改名和删除。
+4. 左边选中 ROI，底部显示像素数、均值、中位数、最低温、最高温和总体标准差。拖黄色顶点调整边界；按住 Shift 拖动可移动整个 ROI。滚轮围绕指针缩放，中键拖动平移。可用 **100%** 按屏幕物理像素查看，或用 **Focus ROI** 聚焦选区。
 5. **Use ROIs** 保留本次打开应用期间的设置。需要下次接着做时，用 **Save ROIs** 保存 JSON，再在同一张 BMT 上用 **Load ROIs** 读取。
 
 ### RGB registration · 对齐热图与可见光图
@@ -28,18 +28,21 @@
 1. 点 **RGB registration**。窗口左边是热图，右边是 BMT 的内嵌 RGB。如果没有内嵌图，点 **Open external RGB**。
 2. 鼠标停在要看的位置滚动滚轮，即可在该处放大或缩小。按住左键拖动平移。轻点左键才会加点。热图、RGB 和结果叠加图都能独立缩放。点 **Fit views** 恢复全图。
 3. 左边点一个热图特征，右边点同一个实际位置，组成一对。优先选两张图都看得清的窗角、石材接缝等特征。在画面不同位置选至少四对，建议多于四对。
-4. 点 **Compute homography**。在 **Overlay** 同一画面看两张图，调整 **Overlay opacity**。右栏列出每对点的重投影误差，还显示内点数、内点平均误差、最大误差和 RMSE。
-5. 点右栏的某一对可放大并定位。RGB 和叠加图里的圆点是你点的位置，叉号是热图点经单应矩阵投过来的位置，连线表示它们的差距。颜色沿用旧工具的 3 和 8 像素分段，RANSAC 内点或外点另在列表标明。
-6. 如果配错了，选中该对，点 **Delete selected pair**，重加再计算。**Save fit report** 保存配对坐标、矩阵和误差。误差单位是原始 RGB 像素，能帮助检查拟合点，独立配准精度仍要用未参与拟合的点核对。
+4. 两侧都可以拖动已有控制点。点击点后用方向键每次移动一个原生像素，或者选择图像、填 X/Y、点 **Apply pixel**。配对编号和 ID 保留。放开鼠标后自动重算；**Undo** 和 **Redo** 用于恢复编辑。
+5. 点 **Focus pair** 定位对应点。RGB 窗格的圆点是手动点选位置，叉号是拟合后的投影位置。右栏区分 RANSAC 内外点，显示逐点残差和内点统计。要测独立配准精度，请用未参与拟合的点另行验证。
+6. **Delete point** 只删除当前图像上的点，点击空白位置补回对应点。**Delete pair** 则删除整对。切换到 **Registered preview**，可查看融合、棋盘格和配准热图。调整配色、温区和网格后点 **Apply display**，透明度可直接用滑块调节。
+7. 点 **Export registration** 输出 RGB、配准热图、融合图、棋盘格、有效像素掩膜、摄氏温度 NPY/CSV、矩阵和控制点。在导出前勾选色条、点位和编号会将相应标注叠加到原生 RGB 分辨率的可视化图里。
 
-Studio 保留论文 `registration.py` 的计算过程，并参考 `register_rgb_ir.py` 重做 WPF 点选与误差复查。叠加图只用于显示，原始温度数据保持在热图自己的网格中。
+Studio 保留论文 `registration.py` 的单应拟合。配准温度网格从原始热矩阵反向映射到 RGB 像素中心，用最近邻取样一次。无效像素在 NPY 中为 NaN、CSV 中为空、掩膜中为 0。融合图、棋盘格和配色热图仅供目视检查，监测统计仍以原始热图网格为准。
 
 ### Monitoring · 看固定相机拍摄的一组图
 
 1. 点 **Monitoring → Open sequence**，选同一机位、同一次实验的 BMT。**Edit first-frame ROIs** 打开首帧，按上面的方式画区域或测温点。
-2. 如果要比较异常区与背景，在 **Anomaly ROI** 和 **Reference ROI** 选两个不同区域，点 **Analyze**。图中 ΔT 是「异常区均温减参考区均温」。正值表示异常区更暖，负值表示更冷。
-3. 看 **Frame checks**。若出现设置不一致、对齐无法确认或时间警告，先对照实验记录。时间优先用 BMT 内相机时钟，时区未经核实；缺失或重复时使用文件名顺序及帧序号。
-4. **Export CSV + PNG** 保存逐帧温度、差值和图。**Save session** 保存 BMT 路径和 ROI，之后用 **Load session** 重开。原 BMT 应留在原路径。
+2. 点 **Analyze** 后，**Chart metric** 默认显示所有可用 ROI 的均温。**Relative · Initial change** 从每个 ROI 自身的基线读数计算变化量。比较异常和参考区时，在 **Reference settings** 选定两者，再切换到 **Contrast · Anomaly pair**。
+3. 在 **ROI visibility and status** 中选中 ROI，可切换单条曲线的显示状态、批量显示或隐藏、改名和设定角色。同名 ROI 用编号和 ID 区分。**Reference** 与 **Material** 可以同时设定。角色标记和实际用于计算的参考选择分别保存。
+4. 在 **Analysis settings** 分别设时间原点、温度基线、事件、导数单位和回归窗口。实际时间戳可用时优先使用。时间不全时可在文件名顺序下保留有可信时间的帧，也可明确填写采样间隔，重建的横轴会标注来源。
+5. 环境温度可在 **Reference settings** 输入常量，或在 **Analysis settings → Ambient series** 输入或导入 `elapsed_seconds,temperature_c`。时间从有效时间轴的零点算起，跟随原始时间轴而非手动设置的实验原点。序列仅在相邻观测点间线性插值。**ROI visibility and status** 可为每个 ROI 单独指定局部背景。
+6. **Export all curves** 或 **Export visible curves** 分别导出当前阶段中的全部图线或仅可见图线。两种方式都保存完整 CSV、会话、分析参数和动态指标。原始 BMT 应留在原路径，以便 **Load session** 重新打开。
 
 The Windows x64 installer and portable archive include a private registration worker. Extract the whole ZIP before opening BmtExporter.exe. End users do not need to install or configure Python. The existing thermal extraction and IRSoft reference workflow remains available from the main window.
 
@@ -47,23 +50,27 @@ The Windows x64 installer and portable archive include a private registration wo
 
 Select a BMT and open **Thermal ROIs**. Choose Polygon, Rectangle, or Point and enter a name. Click **New ROI** and then click the thermal pixels. A rectangle takes two opposite corners. A point takes one click. For a polygon, click the vertices in boundary order, then click **Finish**. Select an existing ROI and drag one of its handles to change its geometry. Use **Rename**, **Delete**, and **Save ROIs** as needed. **Use ROIs** applies the edits in the current app window. **Load ROIs** checks the original BMT's hash and dimensions.
 
-Coordinates are zero-based native pixel centers, with the origin at the upper left. Boundary pixels are included. SD is the population standard deviation in Celsius. The preview may scale to fit the window, while sampling always uses original matrix values.
+Coordinates are zero-based native pixel centers, with the origin at the upper left. Boundary pixels are included. SD is the population standard deviation in Celsius. Zoom and pan are view-only. Shift-drag translates the selected ROI inside the original grid. Dragging a handle edits that native vertex.
 
 ## RGB registration
 
-Open **RGB registration**, use the embedded RGB or open an external image, then alternate thermal and RGB clicks for each matched point. Add at least four well-distributed pairs and click **Compute homography**. The result maps thermal pixel centers to RGB pixel centers. Review the overlay, individual RGB-pixel residuals and RANSAC inliers. A low fit residual describes the chosen correspondences and is not an independent registration accuracy estimate. The overlay is warped for display only. Exporting the fit report records the transform and correspondences.
+Open **RGB registration**, use the embedded RGB or an external image, and place at least four well-distributed pairs. The fit refreshes after a completed edit. Click a point to select both sides of its pair. Drag or use the arrow keys, or apply integer X/Y values for the selected side. The residual panel reports fit residuals in RGB pixels and identifies RANSAC inliers. Independent checkpoint accuracy is unmeasured by this workflow.
 
-Use the wheel to zoom at the cursor and left-drag to pan. Select a pair in the error list to inspect its location. Circles are manually clicked RGB points and crosses are projections of their thermal matches. Reset the panels with **Fit views**.
+Use the wheel to zoom at the cursor and drag empty space or middle-drag to pan. Select a pair and use **Focus pair** to locate it. In the RGB pane, circles are clicked coordinates and crosses are transformed thermal coordinates. **Export registration** saves the RGB grid products and fit metadata. The visualization range and colors affect the PNG/TIFF products only. The registered temperature matrix is sampled once from the original matrix with inverse-map nearest neighbor. Areas outside coverage are transparent in the registered thermal visualization; fusion/checkerboard show the underlying RGB there.
 
 The worker calls `ThermalRegistrar(method="manual")` from the local thesis `legacy_crack_pipeline/modules/registration.py` unchanged, together with its existing `modules._types` dependency. The source used during development had SHA-256 `585964b44b3d4d675a75b4c655c488830fef1774c9c128d63ebf51677e3bd90d`. The worker converts previews and serializes the result. It does not fit a separate homography.
 
 ## Fixed-camera monitoring
 
-Select BMT files from one acquisition session or open them from **Monitoring**. When all camera timestamps are plausible and distinct, the application sorts by the embedded clock and shows acquisition time. The clock's time zone is unknown. Files without usable timestamps or with duplicates in their timestamps use filename order and a frame-index axis, with a warning. Date patterns in filenames serve as a cross-check, not a timestamp substitute.
+Select BMT files from one acquisition session or open them from **Monitoring**. Complete unique timestamps determine sequence order. For incomplete clocks, files stay in filename order. Usable unique timestamps can form a partial axis if they increase in that order. A user-entered interval can reconstruct an incomplete axis in filename order. Without usable timing, charts show frame indices. The original timestamps are always exported when present.
 
 Open **Edit first-frame ROIs** to define masks and individual points, then **Analyze**. The same native indices are used for all frames. A dimensions or camera-model mismatch stops analysis. Settings fingerprints and approximate stationary thermal edges are compared to the first frame. The alignment score is cosine similarity of gradients at unchanged sample locations. A value below 0.65 or insufficient edge energy warns that alignment is unverified. Real changes in heat patterns can affect the score. Inspect the **Frame checks** tab and retain only truly fixed-camera sequences. The software never estimates a temporal transform or resamples the frames.
 
-Select different anomaly and reference regions to plot their mean temperatures and ΔT, defined as anomaly mean minus reference mean. Each frame's count, mean, min, max, population SD and check notes are included for every ROI in the CSV. The PNG contains the plots, and the session JSON stores original source paths, hashes and native ROI definitions. Keep the BMT files in place for reopening.
+The default mean chart includes every eligible visible ROI. Initial change subtracts the same ROI's signal at the selected baseline frame. Local contrast subtracts the explicitly mapped background in each frame, using the session default when there is no override. Ambient contrast uses genuine external air measurements. Enter a constant or a time series on the unshifted elapsed axis. The program linearly interpolates within coverage. Material contrast subtracts the selected material reference from every eligible material, and the material pair chart isolates a chosen comparison. Mean, median, min and max are available as the underlying signal.
+
+Finite differences use adjacent valid frames and are placed at the right-hand frame. Configure a maximum time gap when the experiment has known disallowed interruptions. The optional trailing linear regression uses at least three contiguous observations and appears alongside the raw rate. Internal rate units are °C/s. Chart and additional CSV columns can show °C/s, °C/min or °C/h independently of the time-axis units. Phase indicators use raw differences within each event interval.
+
+Both exports include all defined ROI/frame combinations in CSV, even when a chart uses a phase or hidden curves. PNG scope follows the selected export button. Review ROI completeness and **Frame checks** for missing data. Session JSON preserves inputs, including events, references and visibility. Keep original BMT files in place for reopening.
 
 ## Developer build
 

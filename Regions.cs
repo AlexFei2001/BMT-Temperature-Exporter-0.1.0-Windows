@@ -4,21 +4,29 @@ namespace BmtExporter;
 
 record Pixel(int X, int Y);
 enum RegionKind { Point, Rectangle, Polygon }
+[Flags]
+enum RegionRole { Unclassified = 0, Reference = 1, Material = 2 }
 record Region(Guid Id, string Name, RegionKind Kind, Pixel[] Vertices)
 {
-    public override string ToString() => Name;
+    public RegionRole Role { get; init; }
+    public override string ToString() => $"{Name} [{Id.ToString("N")[..8]}]";
 }
 record RegionDocument(int Version, string SourceSha256, int Width, int Height, Region[] Regions);
-record TemperatureStats(int Count, double Mean, double Min, double Max, double StdDev);
+record TemperatureStats(int Count, double Mean, double Min, double Max, double StdDev)
+{
+    public double? Median { get; init; }
+}
 
 static class Regions
 {
     public static int[] Mask(Region roi, int width, int height)
     {
-        if (roi is null || roi.Id == Guid.Empty || string.IsNullOrWhiteSpace(roi.Name) ||
-            roi.Vertices is null || !Enum.IsDefined(roi.Kind) ||
-            roi.Vertices.Length < 1 || roi.Vertices.Length > 256 ||
-            roi.Vertices.Any(p => p is null || p.X < 0 || p.X >= width || p.Y < 0 || p.Y >= height))
+        if (roi is null || roi.Id == Guid.Empty) throw new InvalidDataException("ROI has no valid ID.");
+        if (string.IsNullOrWhiteSpace(roi.Name)) throw new InvalidDataException("ROI name is empty.");
+        if (!Enum.IsDefined(roi.Kind)) throw new InvalidDataException("Unknown ROI geometry type.");
+        if (roi.Vertices is null || roi.Vertices.Length == 0 || roi.Vertices.Length > 256)
+            throw new InvalidDataException("ROI geometry requires 1 to 256 vertices.");
+        if (roi.Vertices.Any(p => p is null || p.X < 0 || p.X >= width || p.Y < 0 || p.Y >= height))
             throw new InvalidDataException("ROI vertices must be inside the original thermal grid.");
         var v = roi.Vertices;
         if (roi.Kind == RegionKind.Point && v.Length == 1) return [v[0].Y * width + v[0].X];
@@ -56,27 +64,44 @@ static class Regions
 
     public static TemperatureStats Stats(Func<int, double> value, IEnumerable<int> mask)
     {
+        var stats = FiniteStats(value, mask);
+        return stats.Count > 0 ? stats : throw new InvalidDataException("ROI has no finite temperature samples.");
+    }
+
+    public static TemperatureStats FiniteStats(Func<int, double> value, IEnumerable<int> mask, bool median = false)
+    {
         double mean = 0, m2 = 0, min = double.PositiveInfinity, max = double.NegativeInfinity;
         int n = 0;
+        List<double>? ordered = median ? [] : null;
         foreach (int i in mask)
         {
-            double t = value(i), d = t - mean;
+            double t = value(i);
+            if (!double.IsFinite(t)) continue;
+            ordered?.Add(t);
+            double d = t - mean;
             mean += d / ++n;
             m2 += d * (t - mean);
             min = Math.Min(min, t); max = Math.Max(max, t);
         }
-        if (n == 0) throw new InvalidDataException("ROI has no pixels.");
-        return new(n, mean, min, max, Math.Sqrt(Math.Max(0, m2 / n)));
+        if (n == 0) return new(0, double.NaN, double.NaN, double.NaN, double.NaN);
+        ordered?.Sort();
+        return new(n, mean, min, max, Math.Sqrt(Math.Max(0, m2 / n)))
+        { Median = ordered is null ? null : (ordered[n / 2] + ordered[(n - 1) / 2]) / 2 };
     }
 
     public static Region[] Verify(RegionDocument doc, ThermalFrame frame)
     {
-        if (doc.Version != 1 || doc.SourceSha256 != frame.Sha256 || doc.Width != frame.Width ||
-            doc.Height != frame.Height || doc.Regions is null || doc.Regions.Length > 100)
-            throw new InvalidDataException("This ROI file does not match the current BMT.");
+        VerifyGrid(doc, frame);
         foreach (var roi in doc.Regions) Mask(roi, frame.Width, frame.Height);
         if (doc.Regions.Select(r => r.Id).Distinct().Count() != doc.Regions.Length)
             throw new InvalidDataException("The ROI file contains duplicate IDs.");
         return doc.Regions;
+    }
+
+    public static void VerifyGrid(RegionDocument doc, ThermalFrame frame)
+    {
+        if (doc.Version != 1 || doc.SourceSha256 != frame.Sha256 || doc.Width != frame.Width ||
+            doc.Height != frame.Height || doc.Regions is null)
+            throw new InvalidDataException("This ROI file does not match the current BMT.");
     }
 }

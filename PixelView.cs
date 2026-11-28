@@ -12,36 +12,32 @@ sealed class PixelView : FrameworkElement
     private double zoom = 1;
     private Vector pan;
     private Point? pressed;
+    private MouseButton pressedButton;
     private Vector startPan;
     private bool dragged;
     public BitmapSource? Image { get => image; set { image = value; FitView(); } }
     public Action<DrawingContext>? Overlay { get; set; }
     public event Action<Pixel>? PixelClicked;
+    public event Action? ViewChanged;
+    public double PixelScale => Image is null ? 0 : ImageBounds.Width / Image.PixelWidth * VisualTreeHelper.GetDpi(this).DpiScaleX;
     public Rect ImageBounds => Image is null ? Rect.Empty : ZoomedBounds(
         Fit(ActualWidth, ActualHeight, Image.PixelWidth, Image.PixelHeight), RenderSize, zoom, pan);
 
-    public void EnableNavigation()
+    public void EnableNavigation(bool leftDrag = true)
     {
         ClipToBounds = true;
         MouseWheel += (_, e) =>
         {
             if (Image is null || Hit(e) is null || pressed is not null) return;
             var cursor = e.GetPosition(this);
-            Rect b = ImageBounds;
-            double target = Math.Clamp(zoom * Math.Pow(1.25, e.Delta / 120.0), 1, 10);
-            if (target == zoom) return;
-            var ratio = target / zoom;
-            zoom = target;
-            Rect centered = BaseZoomedBounds();
-            pan = new(cursor.X - (cursor.X - b.X) * ratio - centered.X,
-                cursor.Y - (cursor.Y - b.Y) * ratio - centered.Y);
-            RefreshView();
+            ChangeZoom(Math.Pow(1.25, e.Delta / 120.0), cursor);
             e.Handled = true;
         };
-        MouseLeftButtonDown += (_, e) =>
+        MouseDown += (_, e) =>
         {
-            if (Image is null || !CaptureMouse()) return;
-            pressed = e.GetPosition(this); startPan = pan; dragged = false;
+            if (e.ChangedButton != MouseButton.Middle && !(leftDrag && e.ChangedButton == MouseButton.Left)) return;
+            if (Image is null || IsMouseCaptured || !CaptureMouse()) return;
+            pressed = e.GetPosition(this); pressedButton = e.ChangedButton; startPan = pan; dragged = false;
             e.Handled = true;
         };
         MouseMove += (_, e) =>
@@ -51,21 +47,68 @@ sealed class PixelView : FrameworkElement
             dragged |= delta.LengthSquared >= 25;
             if (dragged) { pan = startPan + delta; RefreshView(); }
         };
-        MouseLeftButtonUp += (_, e) =>
+        MouseUp += (_, e) =>
         {
-            if (pressed is not Point from) return;
+            if (pressed is not Point from || e.ChangedButton != pressedButton) return;
             bool click = !dragged && (e.GetPosition(this) - from).LengthSquared < 25;
             pressed = null; ReleaseMouseCapture();
-            if (click && Hit(e) is Pixel p) PixelClicked?.Invoke(p);
+            if (click && e.ChangedButton == MouseButton.Left && Hit(e) is Pixel p) PixelClicked?.Invoke(p);
             e.Handled = true;
         };
         LostMouseCapture += (_, _) => pressed = null;
         SizeChanged += (_, _) => RefreshView();
     }
 
+    public void ReplacePreview(BitmapSource value)
+    {
+        if (image?.PixelWidth != value.PixelWidth || image.PixelHeight != value.PixelHeight) Image = value;
+        else { image = value; InvalidateVisual(); }
+    }
+
+    public void ZoomBy(double factor) => ChangeZoom(factor, new(ActualWidth / 2, ActualHeight / 2));
+
+    public void NativeScale()
+    {
+        if (Image is null || PixelScale <= 0) return;
+        ChangeZoom(1 / PixelScale, new(ActualWidth / 2, ActualHeight / 2));
+    }
+
+    private void ChangeZoom(double factor, Point cursor)
+    {
+        if (Image is null || ActualWidth <= 0 || ActualHeight <= 0) return;
+        Rect b = ImageBounds;
+        double nativeZoom = zoom / Math.Max(PixelScale, .000001);
+        double target = Math.Clamp(zoom * factor, Math.Min(.1, nativeZoom), Math.Max(64, nativeZoom));
+        double ratio = target / zoom;
+        zoom = target;
+        Rect centered = BaseZoomedBounds();
+        pan = new(cursor.X - (cursor.X - b.X) * ratio - centered.X,
+            cursor.Y - (cursor.Y - b.Y) * ratio - centered.Y);
+        RefreshView();
+    }
+
     public void FitView()
     {
-        zoom = 1; pan = default; InvalidateVisual();
+        zoom = 1; pan = default; RefreshView();
+    }
+
+    public void FocusRegion(Pixel[] points)
+    {
+        if (Image is null || points.Length == 0 || ActualWidth <= 0 || ActualHeight <= 0) return;
+        int left = points.Min(p => p.X), right = points.Max(p => p.X);
+        int top = points.Min(p => p.Y), bottom = points.Max(p => p.Y);
+        Rect fitted = Fit(ActualWidth, ActualHeight, Image.PixelWidth, Image.PixelHeight);
+        zoom = Math.Clamp(.7 * Math.Min(ActualWidth / (right - left + 1),
+            ActualHeight / (bottom - top + 1)) / (fitted.Width / Image.PixelWidth), 1, 64);
+        CenterView((left + right) / 2d, (top + bottom) / 2d);
+    }
+
+    private void CenterView(double x, double y)
+    {
+        Rect b = BaseZoomedBounds();
+        pan = new(ActualWidth / 2 - b.X - (x + .5) * b.Width / Image!.PixelWidth,
+            ActualHeight / 2 - b.Y - (y + .5) * b.Height / Image.PixelHeight);
+        RefreshView();
     }
 
     public void FocusPixel(Pixel point)
@@ -91,6 +134,7 @@ sealed class PixelView : FrameworkElement
             pan = new(Math.Clamp(pan.X, -limitX, limitX), Math.Clamp(pan.Y, -limitY, limitY));
         }
         InvalidateVisual();
+        ViewChanged?.Invoke();
     }
 
     public static Rect ZoomedBounds(Rect fitted, Size view, double zoom, Vector pan)

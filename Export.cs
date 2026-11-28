@@ -97,34 +97,7 @@ static class Export
     private static void Write(ThermalFrame frame, string folder, Validation validation, Reference? reference)
     {
         Directory.CreateDirectory(folder);
-        string npy = Path.Combine(folder, "temperature.npy");
-        using (var bin = new BinaryWriter(File.Create(npy), Encoding.ASCII))
-        {
-            bin.Write(new byte[] { 0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 1, 0 });
-            string dtype = frame.PreciseValues is null ? "<f4" : "<f8";
-            string header = FormattableString.Invariant($"{{'descr': '{dtype}', 'fortran_order': False, 'shape': ({frame.Height}, {frame.Width}), }}");
-            header += new string(' ', (64 - (10 + header.Length + 1) % 64) % 64) + "\n";
-            bin.Write((ushort)header.Length);
-            bin.Write(Encoding.ASCII.GetBytes(header));
-            if (frame.PreciseValues is double[] precise)
-                foreach (double value in precise) bin.Write(value);
-            else
-                foreach (float value in frame.Values) bin.Write(value);
-        }
-        using (var csv = new StreamWriter(Path.Combine(folder, "temperature.csv"), false, Encoding.ASCII))
-        {
-            for (int y = 0; y < frame.Height; y++)
-            {
-                for (int x = 0; x < frame.Width; x++)
-                {
-                    if (x > 0) csv.Write(',');
-                    csv.Write(frame.PreciseValues is null
-                        ? frame.Values[y * frame.Width + x].ToString("R", Invariant)
-                        : frame.At(x, y).ToString("R", Invariant));
-                }
-                csv.WriteLine();
-            }
-        }
+        WriteMatrix(Path.Combine(folder, "temperature"), frame.Width, frame.Height, frame.AtIndex, frame.PreciseValues is not null);
         SavePng(frame.Preview, Path.Combine(folder, "thermal_preview.png"));
         if (frame.Visible is not null) SavePng(frame.Visible, Path.Combine(folder, "visible_image.png"));
         if (frame.SourceDisplay is not null) SavePng(frame.SourceDisplay, Path.Combine(folder, "source_display.png"));
@@ -148,6 +121,36 @@ static class Export
                 errorC = frame.At(p.X, p.Y) - p.Celsius
             }), warnings = Warnings(frame, validation), outputSha256 = hashes
         });
+    }
+
+    internal static void WriteMatrix(string stem, int width, int height, Func<int, double> read, bool precise)
+    {
+        string npy = stem + ".npy";
+        using (var bin = new BinaryWriter(File.Create(npy), Encoding.ASCII))
+        {
+            bin.Write(new byte[] { 0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 1, 0 });
+            string dtype = precise ? "<f8" : "<f4";
+            string header = FormattableString.Invariant($"{{'descr': '{dtype}', 'fortran_order': False, 'shape': ({height}, {width}), }}");
+            header += new string(' ', (64 - (10 + header.Length + 1) % 64) % 64) + "\n";
+            bin.Write((ushort)header.Length);
+            bin.Write(Encoding.ASCII.GetBytes(header));
+            for (int i = 0; i < width * height; i++)
+                if (precise) bin.Write(read(i)); else bin.Write((float)read(i));
+        }
+        using (var csv = new StreamWriter(stem + ".csv", false, Encoding.ASCII))
+        {
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    if (x > 0) csv.Write(',');
+                    double value = read(y * width + x);
+                    if (double.IsFinite(value))
+                        csv.Write(precise ? value.ToString("R", Invariant) : ((float)value).ToString("R", Invariant));
+                }
+                csv.WriteLine();
+            }
+        }
     }
 
     public static string HashFile(string path)

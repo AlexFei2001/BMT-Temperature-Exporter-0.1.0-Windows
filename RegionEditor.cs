@@ -20,6 +20,7 @@ sealed class RegionEditor : Window
     private bool drawing;
     private int dragged = -1;
     private Pixel[]? editing;
+    private Pixel? moveOrigin;
     public Region[] Definitions => list.Items.Cast<Region>().ToArray();
 
     public RegionEditor(ThermalFrame frame, IEnumerable<Region> initial)
@@ -38,18 +39,33 @@ sealed class RegionEditor : Window
         Add(toolbar, "Load ROIs", Load);
         Add(toolbar, "Save ROIs", Save);
         Add(toolbar, "Use ROIs", () => { DialogResult = true; });
+        var navigation = new WrapPanel();
+        var scale = new TextBlock { Margin = new Thickness(8) };
+        Add(navigation, "Zoom +", () => view.ZoomBy(1.25));
+        Add(navigation, "Zoom −", () => view.ZoomBy(.8));
+        Add(navigation, "Fit to window", view.FitView);
+        Add(navigation, "Reset view", view.FitView);
+        Add(navigation, "100%", view.NativeScale);
+        Add(navigation, "Focus ROI", () => { if (list.SelectedItem is Region r && r.Vertices is not null &&
+            r.Vertices.All(p => p is not null)) view.FocusRegion(r.Vertices); });
+        navigation.Children.Add(scale);
+        navigation.Children.Add(new TextBlock { Text = "Wheel zoom · middle drag pan · Shift+drag moves selected ROI",
+            Margin = new Thickness(8) });
         kind.SelectionChanged += (_, _) =>
         {
             if (!drawing) return;
             draft.Clear(); view.InvalidateVisual();
         };
         DockPanel.SetDock(toolbar, Dock.Top); root.Children.Add(toolbar);
+        DockPanel.SetDock(navigation, Dock.Top); root.Children.Add(navigation);
         DockPanel.SetDock(status, Dock.Bottom); root.Children.Add(status);
         list.Width = 170; list.Margin = new Thickness(0, 8, 8, 8);
         DockPanel.SetDock(list, Dock.Left); root.Children.Add(list);
         view.Image = frame.Preview; view.Margin = new Thickness(0, 8, 0, 8);
         RenderOptions.SetBitmapScalingMode(view, BitmapScalingMode.NearestNeighbor);
         view.Overlay = Draw;
+        view.ViewChanged += () => scale.Text = $"{view.PixelScale:P0}";
+        view.EnableNavigation(leftDrag: false);
         root.Children.Add(view); Content = root;
         foreach (var r in initial) list.Items.Add(r);
         list.SelectionChanged += (_, _) => { if (list.SelectedItem is Region r) name.Text = r.Name; Refresh(); };
@@ -58,16 +74,21 @@ sealed class RegionEditor : Window
         {
             if (dragged >= 0 && editing is not null && view.Hit(e) is Pixel p)
             { editing[dragged] = p; view.InvalidateVisual(); }
+            else if (moveOrigin is Pixel origin && list.SelectedItem is Region r && view.Hit(e) is Pixel target)
+            {
+                editing = Translate(r.Vertices, target.X - origin.X, target.Y - origin.Y, frame.Width, frame.Height);
+                view.InvalidateVisual();
+            }
         };
         view.MouseLeftButtonUp += (_, _) =>
         {
-            if (dragged < 0) return;
+            if (dragged < 0 && moveOrigin is null) return;
             var vertices = editing;
-            dragged = -1; editing = null; view.ReleaseMouseCapture();
+            dragged = -1; moveOrigin = null; editing = null; view.ReleaseMouseCapture();
             if (vertices is not null && list.SelectedItem is Region r) Safe(() => Replace(r with { Vertices = vertices }));
             view.InvalidateVisual();
         };
-        view.LostMouseCapture += (_, _) => { dragged = -1; editing = null; view.InvalidateVisual(); };
+        view.LostMouseCapture += (_, _) => { dragged = -1; moveOrigin = null; editing = null; view.InvalidateVisual(); };
         status.Text = "Select an ROI to see its statistics. Drag its visible handles to edit.";
     }
 
@@ -83,14 +104,13 @@ sealed class RegionEditor : Window
     private void Finish()
     {
         if (!drawing || kind.SelectedItem is not RegionKind type) return;
-        if (list.Items.Count >= 100) throw new InvalidOperationException("A session can contain up to 100 ROIs.");
         var roi = new Region(Guid.NewGuid(), ReadName($"ROI {list.Items.Count + 1}"), type, draft.ToArray());
         Regions.Mask(roi, frame.Width, frame.Height);
         drawing = false; draft.Clear(); list.Items.Add(roi); list.SelectedItem = roi; Refresh();
     }
     private void Start(object sender, MouseButtonEventArgs e)
     {
-        if (view.Hit(e) is not Pixel p) return;
+        if (view.IsMouseCaptured || view.Hit(e) is not Pixel p) return;
         if (drawing)
         {
             if (draft.Count >= 256 || draft.Contains(p)) return;
@@ -102,11 +122,24 @@ sealed class RegionEditor : Window
             view.InvalidateVisual();
             return;
         }
-        if (list.SelectedItem is not Region r) return;
+        if (list.SelectedItem is not Region r || r.Vertices is not { Length: > 0 } ||
+            r.Vertices.Any(p => p is null)) return;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            if (view.CaptureMouse()) moveOrigin = p;
+            return;
+        }
         int nearest = Enumerable.Range(0, r.Vertices.Length)
             .MinBy(i => (view.Center(r.Vertices[i]) - e.GetPosition(view)).LengthSquared);
         if ((view.Center(r.Vertices[nearest]) - e.GetPosition(view)).Length > 14) return;
         editing = (Pixel[])r.Vertices.Clone(); dragged = nearest; view.CaptureMouse();
+    }
+
+    internal static Pixel[] Translate(Pixel[] points, int dx, int dy, int width, int height)
+    {
+        dx = Math.Clamp(dx, -points.Min(p => p.X), width - 1 - points.Max(p => p.X));
+        dy = Math.Clamp(dy, -points.Min(p => p.Y), height - 1 - points.Max(p => p.Y));
+        return points.Select(p => new Pixel(p.X + dx, p.Y + dy)).ToArray();
     }
     private void Replace(Region r)
     {
@@ -118,14 +151,20 @@ sealed class RegionEditor : Window
         view.InvalidateVisual();
         if (!drawing && list.SelectedItem is Region r)
         {
-            var s = Regions.Stats(frame.AtIndex, Regions.Mask(r, frame.Width, frame.Height));
-            status.Text = $"{r.Name}   {s.Count} pixels   Mean {s.Mean:F3} °C   Min {s.Min:F3} °C   Max {s.Max:F3} °C   SD {s.StdDev:F3} °C";
+            Safe(() =>
+            {
+                var s = Regions.FiniteStats(frame.AtIndex, Regions.Mask(r, frame.Width, frame.Height), median: true);
+                status.Text = s.Count == 0 ? "ROI has no finite temperature samples." :
+                    $"{r.Name}   {s.Count} pixels   Mean {s.Mean:F3} °C   Median {s.Median:F3} °C   " +
+                    $"Min {s.Min:F3} °C   Max {s.Max:F3} °C   SD {s.StdDev:F3} °C";
+            });
         }
     }
     private void Draw(DrawingContext dc)
     {
         foreach (var r in Definitions)
         {
+            if (r.Vertices is null || r.Vertices.Any(p => p is null)) continue;
             bool selected = ReferenceEquals(r, list.SelectedItem);
             DrawShape(dc, r.Kind, selected && editing is not null ? editing : r.Vertices,
                 selected ? Brushes.Gold : Brushes.Turquoise, selected, r.Name);

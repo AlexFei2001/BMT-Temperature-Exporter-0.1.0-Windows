@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 try {
-    $portable = Join-Path $PSScriptRoot 'dist\BmtStudio-0.3.0-win-x64'
+    $portable = Join-Path $PSScriptRoot 'dist\BmtStudio-0.4.0-win-x64'
     if (!$RegistrationSource) {
         $RegistrationSource = Join-Path $PSScriptRoot 'registration_source'
         if (!(Test-Path -LiteralPath $RegistrationSource)) {
@@ -43,7 +43,8 @@ try {
         Get-ChildItem -LiteralPath $dist.FullName -Recurse -File | Where-Object Name -Match '^(LICENSE|COPYING|NOTICE)' |
             ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $workerTarget "$($dist.Name)-$($_.Name)") }
     }
-    Copy-Item -LiteralPath USER-GUIDE.txt,STUDIO.md,FEASIBILITY.md,COMPATIBILITY.md,VALIDATION.md,reference.example.json -Destination $portable
+    Copy-Item -LiteralPath USER-GUIDE.txt,STUDIO.md,FEASIBILITY.md,COMPATIBILITY.md,VALIDATION.md,RELEASE-NOTES.md,REGISTRATION-THERMAL-ANALYSIS-UPDATE.md,ROI-REGRESSION.md,reference.example.json -Destination $portable
+    Copy-Item -LiteralPath docs -Destination $portable -Recurse -Force
     $deps = Get-Content -Raw (Join-Path $portable 'BmtExporter.deps.json') | ConvertFrom-Json
     $assets = Get-Content -Raw 'obj/project.assets.json' | ConvertFrom-Json
     $pkgRoots = $assets.packageFolders.PSObject.Properties.Name
@@ -61,6 +62,6 @@ try {
     Compress-Archive -LiteralPath $portable -DestinationPath "$portable.zip" -Force
     & $InnoCompiler /Q installer.iss
     if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
-    Get-FileHash -Algorithm SHA256 -LiteralPath "$portable.zip",(Join-Path $PSScriptRoot 'dist\BmtStudio-0.3.0-Setup-x64.exe')
+    Get-FileHash -Algorithm SHA256 -LiteralPath "$portable.zip",(Join-Path $PSScriptRoot 'dist\BmtStudio-0.4.0-Setup-x64.exe')
 }
 finally { Pop-Location }
